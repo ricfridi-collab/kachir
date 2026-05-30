@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>مناحل السعيد - نظام متكامل (مع المسح الضوئي)</title>
+    <title>مناحل السعيد - نظام متكامل (محدث)</title>
     <!-- مكتبة مسح الكاميرا -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
@@ -177,6 +177,13 @@
         .status-badge { padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
         .status-paid { background: #e8f5e9; color: #2e7d32; }
         .status-debt { background: #ffebee; color: #c62828; }
+
+        /* System Tools (Programmer) */
+        .tools-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 15px; }
+        .tool-btn { padding: 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s; color: var(--text-main); }
+        .tool-btn:hover { background: #f9f9f9; border-color: var(--primary); }
+        .tool-btn.danger { color: var(--danger); border-color: #fadbd8; }
+        .tool-btn.danger:hover { background: #fdedec; border-color: var(--danger); }
     </style>
 </head>
 <body>
@@ -194,6 +201,8 @@
         <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></symbol>
         <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></symbol>
         <symbol id="icon-scan" viewBox="0 0 24 24"><path d="M4 6h2v2H4V6zm14 0h2v2h-2V6zm0 14h2v2h-2v-2zM4 20h2v2H4v-2zm9.56-12.6l1.45-1.45c.2-.2.2-.51 0-.71l-1.41-1.41c-.2-.2-.51-.2-.71 0l-1.45 1.45 2.12 2.12zM6.92 19L5 17.08l8.06-8.06 1.92 1.92L6.92 19z"/></symbol>
+        <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></symbol>
+        <symbol id="icon-reset" viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></symbol>
     </svg>
 
     <!-- 1. Auth Screens -->
@@ -304,6 +313,18 @@
         </div>
     </div>
 
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="modal-overlay flex-center">
+        <div class="modal-box" style="max-width: 350px;">
+            <div class="modal-title" style="color: var(--danger);">تأكيد الحذف</div>
+            <p id="confirmMessage" style="margin-bottom: 20px; text-align: center; color: var(--text-main);">هل أنت متأكد؟</p>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="closeModal('confirmModal')">إلغاء</button>
+                <button class="btn btn-danger" id="confirmBtnAction">نعم، تأكيد</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 4. Receipt Area -->
     <div id="receipt-print-area">
         <img class="print-logo" src="https://z-cdn-media.chatglm.cn/files/726fe11e-e753-41ea-b85b-eb1606321a07.png?auth_key=1880057993-9ae277c5db2f4595afac925fc9dbb5de-0-802785c39693fca99ee4c6df8049673d" alt="Logo">
@@ -311,7 +332,7 @@
             <h2 style="margin:0; font-size: 16px;">مناحل السعيد</h2>
             <p style="margin:5px 0; font-size: 12px;">لعسل الطبيعي</p>
             <p style="margin:0; font-size: 10px;" id="print-date"></p>
-            <p style="margin:0; font-size: 10px;">#<span id="print-id"></span></p>
+            <p style="margin:0; font-size: 14px; font-weight:bold;">فاتورة #: <span id="print-id"></span></p>
             <p style="margin:0; font-size: 10px; font-weight:bold;">الزبون: <span id="print-customer"></span></p>
         </div>
         <div id="print-items" style="font-size: 12px; margin-bottom: 10px;"></div>
@@ -345,13 +366,16 @@
             sales: JSON.parse(localStorage.getItem('manahil_sales')) || [],
             debts: JSON.parse(localStorage.getItem('manahil_debts')) || [],
             purchases: JSON.parse(localStorage.getItem('manahil_purchases')) || [],
-            cart: []
+            cart: [],
+            // Sequential Invoice Counter
+            invoiceCounter: parseInt(localStorage.getItem('manahil_invoice_counter')) || 1
         };
 
         // Scanner Variables
         let barcodeBuffer = "";
         let barcodeTimeout;
         let html5QrCode = null;
+        let pendingAction = null; // For confirmation modal
 
         // --- Core ---
         function init() {
@@ -401,11 +425,9 @@
 
         // 1. USB/HID Scanner Logic
         function handleBarcodeInput(e) {
-            // Only activate if we are on seller screen and not typing in an input field
             const isInputFocused = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
             if (appState.currentUser?.role !== 'seller' || isInputFocused) return;
 
-            // If Enter key is pressed, process the buffer
             if (e.key === "Enter") {
                 if (barcodeBuffer.length > 0) {
                     processScannedCode(barcodeBuffer);
@@ -414,10 +436,8 @@
                 return;
             }
 
-            // Collect characters
             if (e.key.length === 1) {
                 barcodeBuffer += e.key;
-                // Clear buffer if typing stops (human typing usually slower than scanner)
                 clearTimeout(barcodeTimeout);
                 barcodeTimeout = setTimeout(() => { barcodeBuffer = ""; }, 150); 
             }
@@ -437,23 +457,17 @@
         // 3. Camera Scanner Logic
         function startCameraScanner() {
             document.getElementById('scan-modal').style.display = 'flex';
-            
-            // Delay slightly to ensure DOM is visible
             setTimeout(() => {
                 html5QrCode = new Html5Qrcode("reader");
                 const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-                
                 html5QrCode.start({ facingMode: "environment" }, config, 
                     (decodedText) => {
-                        // Success callback
-                        stopCameraScanner(); // Stop camera after successful scan
+                        stopCameraScanner(); 
                         processScannedCode(decodedText);
                     },
-                    (errorMessage) => {
-                        // parsing error, ignore
-                    }
+                    (errorMessage) => { }
                 ).catch(err => {
-                    showToast("خطأ في الكاميرا: تأكد من السماح بالوصول");
+                    showToast("خطأ في الكاميرا");
                     console.error(err);
                 });
             }, 300);
@@ -558,7 +572,24 @@
             const cust = document.getElementById('customerNameInput').value || "نقدي";
             const isDebt = document.getElementById('isDebtCheck').checked;
             const total = appState.cart.reduce((s,i)=>s+(i.price*i.qty),0);
-            const sale = { id: Date.now(), date: new Date().toLocaleString('ar-DZ'), seller: appState.currentUser.name, items: [...appState.cart], total, customer: cust, isPaid: !isDebt };
+            
+            // Use Sequential ID
+            const invoiceId = appState.invoiceCounter;
+            
+            const sale = { 
+                id: invoiceId, 
+                date: new Date().toLocaleString('ar-DZ'), 
+                seller: appState.currentUser.name, 
+                items: [...appState.cart], 
+                total, 
+                customer: cust, 
+                isPaid: !isDebt 
+            };
+
+            // Increment and Save Counter
+            appState.invoiceCounter++;
+            localStorage.setItem('manahil_invoice_counter', appState.invoiceCounter);
+
             if (isDebt) {
                 const existing = appState.debts.find(d => d.customer === cust);
                 if (existing) existing.amount += total;
@@ -576,8 +607,11 @@
         }
 
         function printReceipt(sale) {
+            // Format ID as 0001, 0002...
+            const formattedId = sale.id.toString().padStart(4, '0');
+            
             document.getElementById('print-date').textContent = sale.date;
-            document.getElementById('print-id').textContent = sale.id.toString().slice(-6);
+            document.getElementById('print-id').textContent = formattedId;
             document.getElementById('print-customer').textContent = sale.customer;
             document.getElementById('print-status').textContent = sale.isPaid ? "مدفوع" : "دين";
             document.getElementById('print-status').style.color = sale.isPaid ? "green" : "red";
@@ -656,7 +690,7 @@
         function renderProdTable() { document.getElementById('prodTable').innerHTML = appState.products.map(p => `<tr><td>${p.name}</td><td><input type="number" value="${p.price}" onchange="updProd(${p.id},'price',this.value)"></td><td><input type="number" value="${p.costPrice||0}" onchange="updProd(${p.id},'costPrice',this.value)"></td><td><input type="number" value="${p.stock}" onchange="updProd(${p.id},'stock',this.value)"></td><td><button class="btn btn-sm btn-primary" onclick="openModal('productModal', ${p.id})"><svg class="icon-svg"><use href="#icon-edit"></use></svg></button></td></tr>`).join(''); }
         function updProd(id, f, v) { const p = appState.products.find(x=>x.id==id); p[f]=parseFloat(v); localStorage.setItem('manahil_products', JSON.stringify(appState.products)); }
 
-        // --- Insight View (The AI/Analytics) ---
+        // --- Insight View ---
         function renderInsightView(container) {
             const currentMonth = new Date().getMonth();
             let season = "", seasonColor = "", strategy = "", focusCategory = "";
@@ -667,8 +701,6 @@
 
             const totalSales = appState.sales.reduce((s,x)=>s+x.total,0);
             const totalProfit = totalSales - appState.purchases.reduce((s,x)=>s+(x.cost*x.qty),0);
-            
-            // Best Product
             const productSales = {};
             appState.sales.forEach(s => s.items.forEach(i => productSales[i.name] = (productSales[i.name] || 0) + i.qty));
             const bestProduct = Object.keys(productSales).reduce((a, b) => productSales[a] > productSales[b] ? a : b, "لا يوجد");
@@ -709,6 +741,91 @@
             if(confirm("حذف نهائياً؟")) { appState.products = appState.products.filter(p => p.id !== id); localStorage.setItem('manahil_products', JSON.stringify(appState.products)); renderInsightView(document.getElementById('app-content')); showToast("تم الحذف"); }
         }
 
+        // --- Programmer View (Updated) ---
+        function renderProgrammerInterface(container) { 
+            container.innerHTML = `
+            <div class="admin-layout">
+                <div class="section-header"><h3>لوحة المبرمج والإعدادات</h3></div>
+                
+                <!-- Backup Section -->
+                <div class="admin-cards" style="margin-bottom:30px;">
+                    <div class="stat-card"><h3>تصدير قاعدة البيانات</h3><p style="font-size:0.8rem;color:#777;margin-bottom:10px;">حفظ نسخة من المنتجات</p><button class="btn btn-blue" onclick="dlDB()"><svg class="icon-svg"><use href="#icon-download"></use></svg> تحميل CSV</button></div>
+                    <div class="stat-card"><h3>استيراد قاعدة البيانات</h3><p style="font-size:0.8rem;color:#777;margin-bottom:10px;">استرجاع أو تحديث المنتجات</p><input type="file" id="csvFile" style="display:none" onchange="ulDB(this)"><button class="btn btn-primary" onclick="document.getElementById('csvFile').click()"><svg class="icon-svg"><use href="#icon-upload"></use></svg> رفع CSV</button></div>
+                </div>
+
+                <!-- System Management Section -->
+                <div class="section-header" style="border-color:var(--danger)"><h3 style="color:var(--danger)">إدارة النظام وتصفير البيانات</h3></div>
+                <div style="background:#fff; padding:15px; border-radius:10px; border:1px solid #eee; margin-bottom:20px;">
+                    <h4 style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:5px;">التحكم بالأرقام</h4>
+                    <div class="tools-grid">
+                        <div class="tool-btn" onclick="confirmAction('invoice')">
+                            <svg class="icon-svg" style="width:24px;height:24px;color:var(--blue)"><use href="#icon-reset"></use></svg>
+                            <span>تصفير رقم الفاتورة</span>
+                            <small style="color:#999">العودة لـ #0001</small>
+                        </div>
+                    </div>
+
+                    <h4 style="margin:20px 0 15px; border-bottom:1px solid #eee; padding-bottom:5px; color:var(--danger)">حذف البيانات (خطير)</h4>
+                    <div class="tools-grid">
+                        <div class="tool-btn danger" onclick="confirmAction('sales')">
+                            <svg class="icon-svg" style="width:24px;height:24px;"><use href="#icon-trash"></use></svg>
+                            <span>مسح المبيعات</span>
+                            <small>حذف سجل المبيعات</small>
+                        </div>
+                        <div class="tool-btn danger" onclick="confirmAction('debts')">
+                            <svg class="icon-svg" style="width:24px;height:24px;"><use href="#icon-trash"></use></svg>
+                            <span>مسح الديون</span>
+                            <small>تصفير ديون العملاء</small>
+                        </div>
+                        <div class="tool-btn danger" onclick="confirmAction('purchases')">
+                            <svg class="icon-svg" style="width:24px;height:24px;"><use href="#icon-trash"></use></svg>
+                            <span>مسح الواردات</span>
+                            <small>حذف سجل الشراء</small>
+                        </div>
+                    </div>
+                </div>
+            </div>`; 
+        }
+
+        // --- Confirmation Logic ---
+        function confirmAction(type) {
+            let msg = "";
+            if(type === 'invoice') msg = "هل تريد تصفير أرقام الفواتير والبدء من 0001؟";
+            else if(type === 'sales') msg = "تحذير: سيتم حذف جميع سجلات المبيعات نهائياً. هل أنت متأكد؟";
+            else if(type === 'debts') msg = "تحذير: سيتم تصفير جميع الديون. هل أنت متأكد؟";
+            else if(type === 'purchases') msg = "تحذير: سيتم حذف سجل الواردات. هل أنت متأكد؟";
+
+            document.getElementById('confirmMessage').textContent = msg;
+            pendingAction = type;
+            document.getElementById('confirmModal').style.display = 'flex';
+            
+            // Set button action
+            const btn = document.getElementById('confirmBtnAction');
+            btn.onclick = executeReset;
+        }
+
+        function executeReset() {
+            if(pendingAction === 'invoice') {
+                appState.invoiceCounter = 1;
+                localStorage.setItem('manahil_invoice_counter', 1);
+                showToast("تم تصفير أرقام الفواتير");
+            } else if(pendingAction === 'sales') {
+                appState.sales = [];
+                localStorage.setItem('manahil_sales', JSON.stringify([]));
+                showToast("تم مسح المبيعات");
+            } else if(pendingAction === 'debts') {
+                appState.debts = [];
+                localStorage.setItem('manahil_debts', JSON.stringify([]));
+                showToast("تم مسح الديون");
+            } else if(pendingAction === 'purchases') {
+                appState.purchases = [];
+                localStorage.setItem('manahil_purchases', JSON.stringify([]));
+                showToast("تم مسح الواردات");
+            }
+            closeModal('confirmModal');
+            pendingAction = null;
+        }
+
         // --- Modal Helper ---
         function openModal(id, prodId=null) {
             document.getElementById(id).style.display = 'flex';
@@ -730,11 +847,20 @@
         }
 
         // --- Other ---
-        function payDebt(idx) { const d = appState.debts[idx]; const amt = parseFloat(prompt(`سداد ${d.customer}\nالمستحق: ${d.amount}\nالمبلغ:`)); if(amt && amt <= d.amount) { d.amount -= amt; if(d.amount <= 0) appState.debts.splice(idx, 1); localStorage.setItem('manahil_debts', JSON.stringify(appState.debts)); renderAdminInterface(document.getElementById('app-content')); showToast("تم التسديد"); } }
+        function payDebt(idx) { 
+            // For simple debt payment in admin view, using native prompt for simplicity or create modal. 
+            // Keeping native for quick math, but safe.
+            const d = appState.debts[idx]; const amt = parseFloat(prompt(`سداد ${d.customer}\nالمستحق: ${d.amount}\nالمبلغ:`)); 
+            if(amt && amt <= d.amount) { 
+                d.amount -= amt; 
+                if(d.amount <= 0) appState.debts.splice(idx, 1); 
+                localStorage.setItem('manahil_debts', JSON.stringify(appState.debts)); 
+                renderAdminInterface(document.getElementById('app-content')); 
+                showToast("تم التسديد"); 
+            } 
+        }
         function exportSales() { const csv = "التاريخ,رقم الفاتورة,الزبون,المبلغ,الحالة,البائع\n" + appState.sales.map(s => `${s.date},${s.id},${s.customer},${s.total},${s.isPaid?'مدفوع':'أجل'},${s.seller}`).join("\n"); const blob = new Blob(["\uFEFF"+csv], {type: 'text/csv;charset=utf-8;'}); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Sales_${new Date().toISOString().slice(0,10)}.csv`; link.click(); }
 
-        // --- Programmer ---
-        function renderProgrammerInterface(container) { container.innerHTML = `<div class="admin-layout"><div class="section-header"><h3>المبرمج</h3></div><div class="admin-cards"><div class="stat-card"><h3>تصدير DB</h3><button class="btn btn-blue" onclick="dlDB()"><svg class="icon-svg"><use href="#icon-download"></use></svg> تحميل</button></div><div class="stat-card"><h3>استيراد DB</h3><input type="file" id="csvFile" style="display:none" onchange="ulDB(this)"><button class="btn btn-primary" onclick="document.getElementById('csvFile').click()"><svg class="icon-svg"><use href="#icon-upload"></use></svg> رفع</button></div></div>`; }
         function dlDB() { const csv = "code,name,category,price,costPrice,stock,img\n" + appState.products.map(p => `${p.code},${p.name},${p.category},${p.price},${p.costPrice},${p.stock},${p.img||''}`).join("\n"); const blob = new Blob(["\uFEFF"+csv], {type: 'text/csv;charset=utf-8;'}); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "Manahil_DB.csv"; link.click(); }
         function ulDB(i) { const f = i.files[0]; if(f) { const r = new FileReader(); r.onload = e => { const l = e.target.result.split('\n'); const nP = []; for(let j=1;j<l.length;j++) { const c = l[j].split(','); if(c.length>=6) nP.push({ id: Date.now()+j, code:c[0].trim(), name:c[1].trim(), category:c[2].trim(), price:parseFloat(c[3]), costPrice: parseFloat(c[4])||0, stock:parseInt(c[5]), img: c[6]?c[6].trim():'' }); } if(nP.length) { appState.products = nP; localStorage.setItem('manahil_products', JSON.stringify(appState.products)); showToast("تم"); setTimeout(()=>location.reload(),1500); } }; r.readAsText(f); } }
 
